@@ -2,13 +2,15 @@
 #include <avr/wdt.h>
 
 #include "config.h"
+#include "protocal.h"
 #include "accel_gyro.h"
 #include "ps2.h"
 #include "motor_control.h"
 
+
 void setup()
 {
-  
+  Serial1.begin(115200);
   Serial.begin(115200);
   delay(300); //added delay to give wireless ps2 module some time to startup, before configuring it
   ps2_init();
@@ -21,6 +23,14 @@ void loop()
 {
 
   accel_gyro_update();
+
+  {
+    uint8_t buf[1];
+    memset(&buf[0], 0, sizeof(buf));
+
+    buf[0] = Serial1.read();
+    serial_handle(&buf[0], 1);
+  }
 
   uint32_t t_now = millis();
   uint64_t t_now_us = micros();
