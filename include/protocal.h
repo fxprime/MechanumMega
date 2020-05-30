@@ -177,10 +177,24 @@ inline void packet_decode(uint16_t quad_uid )
     if (_msgid == ACK) {  
     }
 
-    else if (_msgid == CMD_DO_1) { 
+    else if (_msgid == CMD_MOT_CNT) { 
     }
 
     else if (_msgid == CMD_DO_2) {
 
     }
+}
+
+
+
+
+static inline void send_sensor_status(uint16_t quad_id, sensor_status_s &msg) {
+    sendMessage(SENSOR_STATUS, quad_id, (uint8_t *)&msg, sizeof(msg)); 
+}
+
+static inline void send_system_status(uint16_t quad_id, system_status_s &msg) {
+    sendMessage(SYSTEM_STATUS, quad_id, (uint8_t *)&msg, sizeof(msg)); 
+}
+static inline void send_rc_status(uint16_t quad_id, rc_status_s &msg) {
+    sendMessage(RC_STATUS, quad_id, (uint8_t *)&msg, sizeof(msg)); 
 }

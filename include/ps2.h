@@ -18,7 +18,6 @@ PS2X ps2x; // create PS2 Controller Class
 
 int error = 0;
 byte type = 0;
-uint32_t last_ps2_update = 0;
 
 void (*resetFunc)(void) = 0;
 
@@ -78,6 +77,8 @@ static inline void ps2_update()
     if (t_now - last_ps2 > 100)
     {
 
+
+
         last_ps2 = t_now;
 
         if (error == 1) //skip loop if no controller found
@@ -91,11 +92,25 @@ static inline void ps2_update()
         { //DualShock Controller
 
             ps2x.read_gamepad(false, 0); //read controller and set large motor to spin at 'vibrate' speed
-            last_ps2_update = t_now;
+
+            state.rc.L1 = ps2x.Button(PSB_L1);
+            state.rc.R1 = ps2x.Button(PSB_R1);
+            state.rc.L2 = ps2x.Button(PSB_L2);
+            state.rc.R2 = ps2x.Button(PSB_R2);
+
+            
+            state.rc.LX = ps2x.Analog(PSS_LX);
+            state.rc.LY = ps2x.Analog(PSS_LY);
+            state.rc.RX = ps2x.Analog(PSS_RX);
+            state.rc.RY = ps2x.Analog(PSS_RY);
+            state.rc.last_update = t_now;
+
+            // String typing = String(state.rc.LX) + "\t" + String(state.rc.LY) + "\t" + String(state.rc.RX) + "\t" + String(state.rc.RY);
+            // Serial.println(typing);
         }
     }
 }
 
 static inline bool is_ps2_ok() {
-    return (millis() - last_ps2_update < 3000);
+    return (millis() - state.rc.last_update < 3000);
 }

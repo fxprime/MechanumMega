@@ -39,6 +39,8 @@ float c_magnetom_x;
 float c_magnetom_y;
 float c_magnetom_z;
 
+uint32_t last_imu_update = 0;
+
 //sensor MPU6050 -------------------------------------
 // MPU 6050 Registers
 #define MPU6050_ADDRESS 0x68
@@ -176,9 +178,19 @@ static inline void mpu6050_Gyro_Values()
         result[i] = Wire.read();
         i++;
     }
-        
-    Wire.endTransmission();
-    if(i==6) {
+
+    /**
+     * Output   0 .. success
+     *          1 .. length to long for buffer
+     *          2 .. address send, NACK received
+     *          3 .. data send, NACK received
+     *          4 .. other twi error (lost bus arbitration, bus error, ..)
+     *          5 .. timed out while trying to become Bus Master
+     *          6 .. timed out while waiting for data to be sent
+    **/
+    uint8_t error = Wire.endTransmission();
+    if(i==6 && error==0) {
+        last_imu_update = millis();
         gyroRaw[XAXIS] = ((result[0] << 8) | result[1]);      //-12     -3
         gyroRaw[YAXIS] = ((result[2] << 8) | result[3]) * -1; //37      15
         gyroRaw[ZAXIS] = ((result[4] << 8) | result[5]) * -1; //11    5
@@ -215,7 +227,8 @@ static inline void mpu6050_Accel_Values()
     uint8_t error = Wire.endTransmission();
 
 
-    if(i==6) {
+    if(i==6 && error==0) {
+        last_imu_update = millis();
         accelRaw[XAXIS] = ((result[0] << 8) | result[1]) * -1; //+ 105 + 100 max=4054.46, min=-4149.48
         accelRaw[YAXIS] = ((result[2] << 8) | result[3]);      // - 45 - 35 max=4129.57, min=-4070.64
         accelRaw[ZAXIS] = ((result[4] << 8) | result[5]);      // + 150 + 170 max=4014.73 , min=-4165.13

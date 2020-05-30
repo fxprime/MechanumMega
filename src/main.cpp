@@ -1,20 +1,26 @@
 #include <Arduino.h>
 #include <avr/wdt.h>
 
-#include "config.h"
 #include "protocal.h"
+#include "config.h"
+#include "kinematic.h"
 #include "accel_gyro.h"
 #include "ps2.h"
 #include "motor_control.h"
-
+static inline void modeHandle();
 
 void setup()
 {
-  Serial1.begin(115200);
   Serial.begin(115200);
   delay(300); //added delay to give wireless ps2 module some time to startup, before configuring it
   ps2_init();
   accel_gyro_init();
+
+
+  // pinMode(35, OUTPUT);
+  // pinMode(36, OUTPUT);
+  // digitalWrite(35, HIGH);
+  // digitalWrite(36, LOW);
 
 }
 
@@ -38,6 +44,14 @@ void loop()
   static double x = 0;
   static double y = 0;
 
+
+  /**
+   * 
+   * 
+   * 
+   * 
+   * TODO Floating point the system variable but convert later to protocal related variables*/
+
   if (t_now_us - last_t > 10000UL)
   {
     double dt = (double)(t_now_us - last_t) / 1000000.0;
@@ -47,57 +61,106 @@ void loop()
                    motorRF->getEncoderPosition(),
                    motorLR->getEncoderPosition(),
                    motorRR->getEncoderPosition()};
-    double spd[4];
     for (int i = 0; i < 4; i++)
     {
-      spd[i] = (double)(pos[i] - last_pos[i]) / (encoder_slot * dt); //rpm
-      spd[i] = spd[i]*RPM_TO_RADPS; //rad/s
+      state.wheel.speed[i] = (double)(pos[i] - last_pos[i]) / (encoder_slot * dt); //rpm
+      state.wheel.speed[i] = state.wheel.speed[i]*RPM_TO_RADPS; //rad/s
     }
+    memcpy(&last_pos[0], &pos[0], sizeof(long) * 4);
 
 
     //Mecanum forward kinematic
-    double vxfb = 0.25 * R * (spd[0] + spd[1] + spd[2] + spd[3]);
-    double vyfb = 0.25 * R * (spd[0] - spd[1] - spd[2] + spd[3]);
-    double w0fb = 0.25 * R * wheelk*(-spd[0] + spd[1] - spd[2] + spd[3]);
+    fwd_kinematic(state.wheel, state.vel_est);
 
-    memcpy(&last_pos[0], &pos[0], sizeof(long) * 4);
+    {
+      sensor_status_s sensorMsg;
+      sensorMsg.imu.imu_accel[0] = AccX*100;
+      sensorMsg.imu.imu_accel[1] = AccY*100;
+      sensorMsg.imu.imu_accel[2] = AccZ*100;
+      sensorMsg.imu.imu_gyro[0] = GyroX*100;
+      sensorMsg.imu.imu_gyro[1] = GyroY*100;
+      sensorMsg.imu.imu_gyro[2] = GyroZ*100;
+      sensorMsg.imu.last_update = t_now - last_imu_update;
+      sensorMsg.wheel_speed.speed[0] = state.wheel.speed[0]*100;
+      sensorMsg.wheel_speed.speed[1] = state.wheel.speed[1]*100;
+      sensorMsg.wheel_speed.speed[2] = state.wheel.speed[2]*100;
+      sensorMsg.wheel_speed.speed[3] = state.wheel.speed[3]*100;
+      sensorMsg.wheel_speed.last_update = 0;
+      send_sensor_status(this_quid, sensorMsg);
+    }
 
-    // String msg = String(spd[0]) + "\t"
-    //           + String(spd[1]) + "\t"
-    //           + String(spd[2]) + "\t"
-    //           + String(spd[3]);
+    
+    {
+      rc_status_s rcMsg;
+      memcpy(&rcMsg, &state.rc, sizeof(rcMsg));
+      rcMsg.last_update = t_now - state.rc.last_update;
+      send_rc_status(this_quid, rcMsg);
+    }
+    
 
-    // String msg = String(vxfb) + "\t" + String(vyfb) + "\t" + String(w0fb);
-    // String msg = String(AccX) + "\t" + String(AccY)+ "\t" + String(AccZ) + "\t" + String(GyroZ);
-    // String msg = String(w0fb) + "\t" + String(GyroZ);
-    String msg = String(AccX) + "\t" + String(AccY);
-    Serial.println(msg);
+    
+
+
+    // String typing = String(state.wheel.speed[0]) + "\t"
+    //           + String(state.wheel.speed[1]) + "\t"
+    //           + String(state.wheel.speed[2]) + "\t"
+    //           + String(state.wheel.speed[3]);
+
+    // // String typing = String(vxfb) + "\t" + String(vyfb) + "\t" + String(w0fb);
+    // // String typing = String(AccX) + "\t" + String(AccY)+ "\t" + String(AccZ) + "\t" + String(GyroZ);
+    String typing = String(state.vel_est.wz) + "\t" + String(GyroZ);
+    // // String typing = String(AccX) + "\t" + String(AccY);
+    Serial.println(typing);
   }
 
+
+  /**************
+   * Update Joy |
+   *************/ 
   ps2_update();
 
+
+
+  // static uint32_t last_gg = millis();
+  // if(millis() - last_gg > 100) {
+  //   last_gg = millis();
+  //   float val = -200.0*(millis()%2000>1000 ? 1.0:-1.0);
+  //   motorRR->speed(val);
+
+
+
+  //   Serial.println(val);
+  
+  // }
+
+
+
+
+
+
+
+  /**
+   * Allow control motor while joy is ok (for now) 
+   */
   if (is_ps2_ok())
   {
 
-    static int wheel_num = 0;
-    static bool last_mode = false;
-    if (last_mode != ps2x.Button(PSB_L2))
-    {
-      last_mode = ps2x.Button(PSB_L2);
-      if (ps2x.Button(PSB_L2))
-        wheel_num = (wheel_num + 1) % 4;
-      Serial.println("Mode changed " + String(wheel_num));
-    }
+    modeHandle();
 
-    if (ps2x.Button(PSB_L1) || ps2x.Button(PSB_R1))
+    /**
+     * Manual control 
+     */
+    if ( (state.rc.L1 || state.rc.R1) )
     {
-      int LY = ps2x.Analog(PSS_RY);
-      int LX = ps2x.Analog(PSS_LX);
-      int RX = ps2x.Analog(PSS_RX);
+      //Force manual when rc is engaged
+      state.mode = mMANUAL;
+      int LY = state.rc.RY;
+      int LX = state.rc.LX;
+      int RX = state.rc.RX;
       float forwardNormalized = (float)(-LY + 128) / 127.f;
 
       forwardNormalized = constrain(forwardNormalized, -1.f, 1.f);
-      float multiplier = (ps2x.Button(PSB_L1) && ps2x.Button(PSB_R1)) ? 255.f : 125.f;
+      float multiplier = (state.rc.L1 && state.rc.R1) ? 255.f : 125.f;
       int forward = (int)(pow(forwardNormalized, 2.0) * multiplier);
 
       // Preserve the direction of movement.
@@ -109,27 +172,74 @@ void loop()
       int right = -RX + 127;
       int ccwTurn = (LX - 127) / 2;
 
-      float wds = -ccwTurn * 0.5;
-      float vx = forward * 0.05;
-      float vy = -right * 0.05;
 
-      float ro = (L1 + L2) * wds;
 
-      float w1 = (vx + vy - ro) / R;
-      float w2 = (vx - vy + ro) / R;
-      float w3 = (vx - vy - ro) / R;
-      float w4 = (vx + vy + ro) / R;
+      state.veld.vx = forward * 0.05;
+      state.veld.vy = -right * 0.05;
+      state.veld.wz = -ccwTurn * 0.5;
+      state.veld.last_update = t_now;
 
-      motorLF->speed(w1);
-      motorRF->speed(w2);
-      motorLR->speed(w3);
-      motorRR->speed(w4);
 
-      //        motorLF->speed(forward + ccwTurn - right); motorRF->speed(forward - ccwTurn + right);
-      //        motorLR->speed(forward - ccwTurn - right); motorRR->speed(forward + ccwTurn + right);
+      // float test_force = (float)state.veld.vx*255.0/10.0;
+      // Serial.println(test_force);
+      // motorLF->speed(test_force);
+      // motorRF->speed(test_force);
+      // motorLR->speed(test_force);
+      // motorRR->speed(test_force);
+      // String typing = String(state.wheeld.speed[0]) + "\t"
+      //   + String(state.wheeld.speed[1]) + "\t"
+      //   + String(state.wheeld.speed[2]) + "\t"
+      //   + String(state.wheeld.speed[3]); 
+      // String typing = String(state.veld.vx) + "\t"
+      //   + String(state.veld.vy) + "\t"
+      //   + String(state.veld.wz);
+      // Serial.println(typing);
     }
-    else
-    {
+    else if(state.mode == mAUTO){
+      state.veld.vx =0;
+      state.veld.vy =0;
+      state.veld.wz =0;
+      state.veld.last_update = t_now;
+      
+    }
+  }
+
+
+
+  /**
+   * Motor out
+   */
+  {
+    inv_kinematic(state.veld, state.wheeld);
+
+    // String typing = String(state.wheeld.speed[0]) + "\t"
+    //     + String(state.wheeld.speed[1]) + "\t"
+    //     + String(state.wheeld.speed[2]) + "\t"
+    //     + String(state.wheeld.speed[3]); 
+    // Serial.println(typing);
+    /**
+     * TODO
+     * Convert between veld and pwm (Using pid?)
+     */ 
+
+    if( t_now - state.veld.last_update < 1000 ) {
+      motorLF->speed(state.wheeld.speed[0]);
+      motorRF->speed(state.wheeld.speed[1]);
+      motorLR->speed(state.wheeld.speed[2]);
+      motorRR->speed(state.wheeld.speed[3]);
+
+
+      // Hard stop if power less than thresold to drain all current back to source faster.
+      if (motorLF->getSpeed() != 0 && fabs(state.wheeld.speed[0])<5) motorLF->hardStop(); 
+      if (motorRF->getSpeed() != 0 && fabs(state.wheeld.speed[1])<5) motorRF->hardStop(); 
+      if (motorLR->getSpeed() != 0 && fabs(state.wheeld.speed[2])<5) motorLR->hardStop(); 
+      if (motorRR->getSpeed() != 0 && fabs(state.wheeld.speed[3])<5) motorRR->hardStop(); 
+      
+
+
+      
+    }else{
+      
       // If there's motor power, try to hard-stop briefly.
       if (motorLF->getSpeed() != 0 || motorRF->getSpeed() != 0 || motorLR->getSpeed() != 0 || motorRR->getSpeed() != 0)
       {
@@ -140,4 +250,19 @@ void loop()
       }
     }
   }
+  
+      
+}
+
+
+/**
+ * Mode circling handle when press Button X 
+ */ 
+static inline void modeHandle() {
+  static bool last_but = false;
+  if ( !last_but && state.rc.but_X ) {
+    state.mode = (mode_enum)((state.mode+1)%mNum);
+    Serial.println("Mode chaged! to " + String(mode_interpret(state.mode)));
+  }
+  last_but = state.rc.but_X;
 }

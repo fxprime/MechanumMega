@@ -89,7 +89,13 @@ long SPDMotor::getEncoderPosition() {
 }
 
 
-SPDMotor *motorLF = new SPDMotor(18, 31, false, 12, 34, 35); // <- Encoder reversed to make +position measurement be forward.
-SPDMotor *motorRF = new SPDMotor(19, 38, false, 8, 36, 37); // <- NOTE: Motor Dir pins reversed for opposite operation
-SPDMotor *motorLR = new SPDMotor( 3, 49, false,  9, 43, 42); // <- Encoder reversed to make +position measurement be forward.
-SPDMotor *motorRR = new SPDMotor( 2, A1, true, 5, A5, A4); // <- NOTE: Motor Dir pins reversed for opposite operation
+// SPDMotor *motorLF = new SPDMotor(18, 31, false, 12, 34, 35); // <- Encoder reversed to make +position measurement be forward.
+// SPDMotor *motorRF = new SPDMotor(19, 38, false, 8, 36, 37); // <- NOTE: Motor Dir pins reversed for opposite operation
+// SPDMotor *motorLR = new SPDMotor( 3, 49, false,  9, 43, 42); // <- Encoder reversed to make +position measurement be forward.
+// SPDMotor *motorRR = new SPDMotor( 2, A1, true, 5, A5, A4); // <- NOTE: Motor Dir pins reversed for opposite operation
+
+
+SPDMotor *motorLF = new SPDMotor(19, 38, false, 9, 43, A4); // <- Encoder reversed to make +position measurement be forward.
+SPDMotor *motorRF = new SPDMotor(18, 31, false, 5, A5, 42); // <- NOTE: Motor Dir pins reversed for opposite operation
+SPDMotor *motorLR = new SPDMotor( 3, 49, false,  8, 35, 36); // <- Encoder reversed to make +position measurement be forward.
+SPDMotor *motorRR = new SPDMotor( 2, 23, true, 12, 37, 34); // <- NOTE: Motor Dir pins reversed for opposite operation

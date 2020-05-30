@@ -40,6 +40,13 @@ static inline void accel_gyro_update() {
 
     mpu6050_Get_accel();
     mpu6050_Get_gyro();
+    state.imu.imu_accel[0] = AccX;
+    state.imu.imu_accel[1] = AccY;
+    state.imu.imu_accel[2] = AccZ;
+    state.imu.imu_gyro[0] = GyroX;
+    state.imu.imu_gyro[1] = GyroY;
+    state.imu.imu_gyro[2] = GyroZ;
+    
   }
 
 
