@@ -4,7 +4,7 @@
 #define SENSOR_STATUS       50
 #define SYSTEM_STATUS       51
 #define RC_STATUS           52
-#define CMD_MOT_CNT         100
+#define VEL_CNT             53
 #define CMD_DO_2            101
 
 

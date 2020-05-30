@@ -1,3 +1,5 @@
+#define USE_PROTOCAL
+
 #include <Arduino.h>
 #include <avr/wdt.h>
 
@@ -16,12 +18,6 @@ void setup()
   ps2_init();
   accel_gyro_init();
 
-
-  // pinMode(35, OUTPUT);
-  // pinMode(36, OUTPUT);
-  // digitalWrite(35, HIGH);
-  // digitalWrite(36, LOW);
-
 }
 
 
@@ -34,7 +30,7 @@ void loop()
     uint8_t buf[1];
     memset(&buf[0], 0, sizeof(buf));
 
-    buf[0] = Serial1.read();
+    buf[0] = Serial.read();
     serial_handle(&buf[0], 1);
   }
 
@@ -86,6 +82,9 @@ void loop()
       sensorMsg.wheel_speed.speed[2] = state.wheel.speed[2]*100;
       sensorMsg.wheel_speed.speed[3] = state.wheel.speed[3]*100;
       sensorMsg.wheel_speed.last_update = 0;
+      sensorMsg.est_speed.vx = state.vel_est.vx*100;
+      sensorMsg.est_speed.vy = state.vel_est.vy*100;
+      sensorMsg.est_speed.wz = state.vel_est.wz*100;
       send_sensor_status(this_quid, sensorMsg);
     }
 
@@ -95,6 +94,20 @@ void loop()
       memcpy(&rcMsg, &state.rc, sizeof(rcMsg));
       rcMsg.last_update = t_now - state.rc.last_update;
       send_rc_status(this_quid, rcMsg);
+    }
+
+
+    {
+      static uint32_t last_sent = millis();
+      if( t_now - last_sent > 33) {
+        last_sent = t_now;
+        cnt_status_s msg;
+        msg.vel_cnt.vx = state.veld.vx*100;
+        msg.vel_cnt.vy = state.veld.vy*100;
+        msg.vel_cnt.wz = state.veld.wz*100;
+        msg.vel_cnt.last_update = t_now - state.veld.last_update;
+        send_cnt_status(this_quid, msg);
+      }
     }
     
 
@@ -108,9 +121,9 @@ void loop()
 
     // // String typing = String(vxfb) + "\t" + String(vyfb) + "\t" + String(w0fb);
     // // String typing = String(AccX) + "\t" + String(AccY)+ "\t" + String(AccZ) + "\t" + String(GyroZ);
-    String typing = String(state.vel_est.wz) + "\t" + String(GyroZ);
+    // String typing = String(state.vel_est.wz) + "\t" + String(GyroZ);
     // // String typing = String(AccX) + "\t" + String(AccY);
-    Serial.println(typing);
+    // Serial.println(typing);
   }
 
 
@@ -170,13 +183,13 @@ void loop()
       }
 
       int right = -RX + 127;
-      int ccwTurn = (LX - 127) / 2;
+      int ccwTurn = (LX - 127) ;
 
-
-
-      state.veld.vx = forward * 0.05;
-      state.veld.vy = -right * 0.05;
-      state.veld.wz = -ccwTurn * 0.5;
+      
+      const float cmd_scale = 0.5;
+      state.veld.vx = cmd_scale*forward*max_linear_spd/127.0;
+      state.veld.vy = -cmd_scale*right*max_linear_spd/127.0;
+      state.veld.wz = -cmd_scale*ccwTurn*max_angular_spd/127.0;
       state.veld.last_update = t_now;
 
 
@@ -223,10 +236,10 @@ void loop()
      */ 
 
     if( t_now - state.veld.last_update < 1000 ) {
-      motorLF->speed(state.wheeld.speed[0]);
-      motorRF->speed(state.wheeld.speed[1]);
-      motorLR->speed(state.wheeld.speed[2]);
-      motorRR->speed(state.wheeld.speed[3]);
+      motorLF->speed(wspd_to_pwm(state.wheeld.speed[0]));
+      motorRF->speed(wspd_to_pwm(state.wheeld.speed[1]));
+      motorLR->speed(wspd_to_pwm(state.wheeld.speed[2]));
+      motorRR->speed(wspd_to_pwm(state.wheeld.speed[3]));
 
 
       // Hard stop if power less than thresold to drain all current back to source faster.

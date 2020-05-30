@@ -1,3 +1,4 @@
+
 const float this_quid = 33;
 const float R = 0.026;
 const float L1 =0.078;
@@ -6,6 +7,9 @@ const float wheelk = (1/(L1+L2));
 const double encoder_slot = 46;
 const double RPM_TO_RADPS = 2.0*M_PI/60.0;
 
+const float max_wspd = 17.5; //rad/s
+const float max_linear_spd = 0.4; //m/s
+const float max_angular_spd = 2.5; //rad/s
 
 /**
  * Use absolute timestamp for last_update variable here

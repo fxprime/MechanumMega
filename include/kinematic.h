@@ -1,5 +1,7 @@
 
-
+static inline float wspd_to_pwm(const float& wspd) {
+    return 255.0*wspd/max_wspd;
+}
 static inline void inv_kinematic(const svel_s& vel, swheel_speed_s& wheel) {
     float vx = vel.vx;
     float vy = vel.vy;

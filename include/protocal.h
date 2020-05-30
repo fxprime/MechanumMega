@@ -114,6 +114,10 @@ calcChecksum(const uint8_t *buffer, const uint16_t length, ulink_checksum_t *che
 bool
 sendMessage(const uint8_t msg, const uint16_t id, const uint8_t *payload, const uint16_t length)
 { 
+
+    #ifndef USE_PROTOCAL
+        return true;
+    #endif
     ulink_header_t   header = {0};
     ulink_checksum_t checksum = {0};
 
@@ -131,24 +135,24 @@ sendMessage(const uint8_t msg, const uint16_t id, const uint8_t *payload, const 
     }
     
     
-    if (Serial1.write((char *)&header, sizeof(header)) != sizeof(header)) {
-        Serial.println("Write failed closing port..");
+    if (Serial.write((char *)&header, sizeof(header)) != sizeof(header)) {
+        // Serial.println("Write failed closing port..");
         delay(1000);
 
-        Serial.println("Done..Exit");
+        // Serial.println("Done..Exit");
         delay(1000);
         exit(0);
         return false;
     }
 
 
-    if (payload && Serial1.write((char *)payload, length) != length) {
-        Serial.println("write payload failed");
+    if (payload && Serial.write((char *)payload, length) != length) {
+        // Serial.println("write payload failed");
         return false;
     }
 
-    if (Serial1.write((char *)&checksum, sizeof(checksum)) != sizeof(checksum)) {
-        Serial.println("write checksum failed");
+    if (Serial.write((char *)&checksum, sizeof(checksum)) != sizeof(checksum)) {
+        // Serial.println("write checksum failed");
         return false;
     }
     
@@ -177,9 +181,6 @@ inline void packet_decode(uint16_t quad_uid )
     if (_msgid == ACK) {  
     }
 
-    else if (_msgid == CMD_MOT_CNT) { 
-    }
-
     else if (_msgid == CMD_DO_2) {
 
     }
@@ -197,4 +198,7 @@ static inline void send_system_status(uint16_t quad_id, system_status_s &msg) {
 }
 static inline void send_rc_status(uint16_t quad_id, rc_status_s &msg) {
     sendMessage(RC_STATUS, quad_id, (uint8_t *)&msg, sizeof(msg)); 
+}
+static inline void send_cnt_status(uint16_t quad_id, cnt_status_s &msg) {
+    sendMessage(VEL_CNT, quad_id, (uint8_t *)&msg, sizeof(msg)); 
 }
