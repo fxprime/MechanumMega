@@ -97,6 +97,10 @@ static inline void ps2_update()
             state.rc.R1 = ps2x.Button(PSB_R1);
             state.rc.L2 = ps2x.Button(PSB_L2);
             state.rc.R2 = ps2x.Button(PSB_R2);
+            state.rc.but_O = ps2x.Button(PSB_CIRCLE);
+            state.rc.but_X = ps2x.Button(PSB_CROSS);
+            state.rc.but_A = ps2x.Button(PSB_TRIANGLE);
+            state.rc.but_S = ps2x.Button(PSB_SQUARE);
 
             
             state.rc.LX = ps2x.Analog(PSS_LX);

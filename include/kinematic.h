@@ -14,6 +14,10 @@ static inline void inv_kinematic(const svel_s& vel, swheel_speed_s& wheel) {
 }
 static inline void fwd_kinematic(const swheel_speed_s& wheel, svel_s& out) {
     out.vx = 0.25 * R * (wheel.speed[0] + wheel.speed[1] + wheel.speed[2] + wheel.speed[3]);
-    out.vy = 0.25 * R * (wheel.speed[0] - wheel.speed[1] - wheel.speed[2] + wheel.speed[3]);
+    out.vy = -0.25 * R * (wheel.speed[0] - wheel.speed[1] - wheel.speed[2] + wheel.speed[3]);
     out.wz = 0.25 * R * wheelk*(-wheel.speed[0] + wheel.speed[1] - wheel.speed[2] + wheel.speed[3]);
+}static inline void fwd_kinematic(const swheel_theata_s& wheel, spos_s& out) {
+    out.x = 0.25 * R * (wheel.theata[0] + wheel.theata[1] + wheel.theata[2] + wheel.theata[3]);
+    out.y = -0.25 * R * (wheel.theata[0] - wheel.theata[1] - wheel.theata[2] + wheel.theata[3]);
+    out.thz = 0.25 * R * wheelk*(-wheel.theata[0] + wheel.theata[1] - wheel.theata[2] + wheel.theata[3]);
 }

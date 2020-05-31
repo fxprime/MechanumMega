@@ -53,12 +53,20 @@ struct vel_s {
     int16_t   wz;          // crad/s
 };
 
+struct pos_s {
+    uint32_t  last_update; // ms ago
+    int32_t   x;          // cm/s
+    int32_t   y;          // cm/s
+    int16_t   thz;          // crad/s
+};
+
 
 /* SENSOR_STATUS */
 struct sensor_status_s {
     wheel_speed_s   wheel_speed;
     imu_s           imu;
     vel_s           est_speed;
+    pos_s           est_pos;
 };
 
 
