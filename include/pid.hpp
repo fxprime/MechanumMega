@@ -2,6 +2,39 @@
 #define _PID_HPP_
 
 
+  
+/* -------------------------------------------------------------------------- */
+/*                          ฟังก์ชัน map ค่าแบบทศนิยม                             */
+/* -------------------------------------------------------------------------- */
+double mapf(double val, double in_min, double in_max, double out_min, double out_max) {
+    return (val - in_min) * (out_max - out_min) / (in_max - in_min) + out_min;
+}
+
+
+
+/* -------------------------------------------------------------------------- */
+/*    ฟังก์ชันทำ deadband สำหรับตัดค่าที่ต่ำกว่า deadband ให้กลายเป็น 0 สำหรับช่วง [-1,1]  */
+/* -------------------------------------------------------------------------- */
+float applyDeadbandf(const float& value, const float& d) {
+  float out=0;
+  if (value>d) 
+    out = (value-d)/(1-d);
+  else if (value>-d) 
+    out = 0;
+  else 
+    out = (value+d)/(1-d);
+  return out;
+}
+
+/* -------------------------------------------------------------------------- */
+/*          ฟังก์ชันดูเครื่องหมาย >0 ให้ค่าเป็น 1 , <0 ให้ค่าเป็น -1                       */
+/* -------------------------------------------------------------------------- */
+
+template <typename type>
+type sign(type value) {
+    return type((value>0)-(value<0));
+}
+
 class MPID{
   public:
 
@@ -44,28 +77,6 @@ class MPID{
 
   inline void init() {
     lastTime=millis();
-  }
-  
-  //ฟังก์ชัน map ค่าแบบทศนิยม
-  double mapf(double val, double in_min, double in_max, double out_min, double out_max) {
-      return (val - in_min) * (out_max - out_min) / (in_max - in_min) + out_min;
-  }
-  //ฟังก์ชันทำ deadband สำหรับตัดค่าที่ต่ำกว่า deadband ให้กลายเป็น 0 สำหรับช่วง [-1,1]
-  float applyDeadbandf(const float& value, const float& d) {
-    float out=0;
-    if (value>d) 
-      out = (value-d)/(1-d);
-    else if (value>-d) 
-      out = 0;
-    else 
-      out = (value+d)/(1-d);
-    return out;
-  }
-
-  //ฟังก์ชันดูเครื่องหมาย >0 ให้ค่าเป็น 1 , <0 ให้ค่าเป็น -1
-  template <typename type>
-  type sign(type value) {
-      return type((value>0)-(value<0));
   }
 
   inline float predictPWM(const float& wheeld) {
@@ -111,6 +122,90 @@ class MPID{
   }
   inline float getPWMOUT() {
     return pwm_out;
+  }
+};
+
+
+
+
+
+
+class HPID{
+  public:
+
+    float kP,kI,kD;
+    float error;
+    float currentError;
+    float lastError;
+    float p_out;
+    float i_out;
+    float d_out;
+    float pid_out;
+    float yawrate_out;
+    unsigned long lastTime;
+    unsigned long currentTime;
+    
+
+    float deltaT;
+
+
+
+  HPID(float kp,float ki,float kd){
+
+    kP=kp;
+    kI=ki;
+    kD=kd;
+
+    
+    
+    error=0;
+    currentError=0;
+    lastError=0;
+    deltaT=0.1;//TODO
+  }
+
+  inline void init() {
+    lastTime=millis();
+    currentError=0;
+  }
+  
+
+  inline float getYawrateD(const float& yawd, const float& cur_yaw){
+    currentTime = millis();
+    deltaT=(currentTime-lastTime)/1000.0;
+
+    error=yawd-cur_yaw;
+    if( fabs(error) < 0.005) {
+      currentError = 0;
+      return 0;
+    }
+    
+    currentError+=kI*error;
+
+    p_out = kP*error;
+    i_out = constrain(currentError, -0.8, 0.8);
+    d_out = constrain(kD*(error-lastError), -0.8,0.8);
+    pid_out = constrain(p_out + i_out + d_out,-1.0,1.0);
+    yawrate_out = pid_out*max_wspd;
+
+    lastError=error;
+    return yawrate_out;
+  }
+
+  inline float getPIDOUT() {
+    return pid_out;
+  }
+  inline float getPOUT() {
+    return p_out;
+  }
+  inline float getIOUT() {
+    return i_out;
+  }
+  inline float getDOUT() {
+    return d_out;
+  }
+  inline float getPWMOUT() {
+    return yawrate_out;
   }
 };
 #endif

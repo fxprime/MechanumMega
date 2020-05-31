@@ -13,9 +13,13 @@ const float max_linear_spd = 0.4; //m/s
 const float max_angular_spd = 2.5; //rad/s
 
 
-const float _kp = 0.2;
-const float _ki = 0.01;
-const float _kd = 0.05;
+const float _Mkp = 0.2;
+const float _Mki = 0.01;
+const float _Mkd = 0.05;
+
+const float _Hkp = 0.2;
+const float _Hki = 0.01;
+const float _Hkd = 0.0;
 
 /**
  * Use absolute timestamp for last_update variable here
@@ -56,9 +60,11 @@ typedef struct {
     simu_s          imu;
     svel_s          vel_est;
     spos_s          pos_est;
+    spos_s          pos_d;
     svel_s          veld;
     rc_status_s     rc;
     mode_enum       mode;
+    bool            heading_lock;
 
 }state_s;
 

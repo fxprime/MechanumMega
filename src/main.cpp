@@ -13,10 +13,11 @@
 static inline void modeHandle();
 static inline void speedHandle();
 
-MPID mpid_LF(_kp, _ki, _kd, false);
-MPID mpid_RF(_kp, _ki, _kd, false);
-MPID mpid_LR(_kp, _ki, _kd, false);
-MPID mpid_RR(_kp, _ki, _kd, false);
+MPID mpid_LF(_Mkp, _Mki, _Mkd, false);
+MPID mpid_RF(_Mkp, _Mki, _Mkd, false);
+MPID mpid_LR(_Mkp, _Mki, _Mkd, false);
+MPID mpid_RR(_Mkp, _Mki, _Mkd, false);
+HPID headingPID(_Hkp, _Hki, _Hkd);
 
 void setup()
 {
@@ -28,6 +29,7 @@ void setup()
   mpid_RF.init();
   mpid_LR.init();
   mpid_RR.init();
+  headingPID.init();
 
 }
 
@@ -212,12 +214,18 @@ void loop()
 
       int right = -RX + 127;
       int ccwTurn = (LX - 127) ;
+      
 
       
       const float cmd_scale = 0.3;
       state.veld.vx = cmd_scale*forward*max_linear_spd/127.0;
       state.veld.vy = -cmd_scale*right*max_linear_spd/127.0;
-      state.veld.wz = -cmd_scale*ccwTurn*max_angular_spd/127.0;
+      if( abs(ccwTurn) < 10 ) {
+        state.heading_lock = true;
+      }else{
+        state.heading_lock = false;
+        state.veld.wz = -cmd_scale*ccwTurn*max_angular_spd/127.0;
+      }
       state.veld.last_update = t_now;
 
 
@@ -248,6 +256,7 @@ void loop()
       state.veld.vy =0;
       state.veld.wz =0;
       state.veld.last_update = t_now;
+      state.heading_lock = true;
       
     }
     else {
@@ -255,16 +264,30 @@ void loop()
       state.veld.vy =0;
       state.veld.wz =0;
       state.veld.last_update = t_now;
+      state.heading_lock = true;
     }
+
+
+    /* -------------------------------------------------------------------------- */
+    /*                  if not in rate control, let save current                  */
+    /* -------------------------------------------------------------------------- */
+    static bool last_heading_lock = state.heading_lock;
+    if(state.heading_lock && !last_heading_lock) {
+      state.pos_d.thz = state.pos_est.thz + state.vel_est.wz*0.2;
+    }
+    if(!state.heading_lock)
+      state.pos_d.thz = state.pos_est.thz;
+    last_heading_lock = state.heading_lock;
+
+    
   }
 
 
+  /* -------------------------------------------------------------------------- */
+  /*                                  Motor Out                                 */
+  /* -------------------------------------------------------------------------- */
 
-  /**
-   * Motor out
-   */
   {
-    inv_kinematic(state.veld, state.wheeld);
 
     /**
      * TODO
@@ -279,9 +302,20 @@ void loop()
       /* -------------------------------------------------------------------------- */
       {
         static uint32_t last_cnt = millis();
-        if( t_now - last_cnt > 20) {
+        if( t_now - last_cnt > 10) {
           last_cnt = t_now;
           
+
+          /* -------------------------------------------------------------------------- */
+          /*                    keep control yaw when in heading lock                   */
+          /* -------------------------------------------------------------------------- */
+          if(state.heading_lock)
+            state.veld.wz = headingPID.getYawrateD(state.pos_d.thz, state.pos_est.thz);
+          else
+            headingPID.init();
+          
+          inv_kinematic(state.veld, state.wheeld);
+
           motorLF->speed(mpid_LF.getPWM(state.wheeld.speed[0], state.wheel.speed[0]));
           motorRF->speed(mpid_RF.getPWM(state.wheeld.speed[1], state.wheel.speed[1]));
           motorLR->speed(mpid_LR.getPWM(state.wheeld.speed[2], state.wheel.speed[2]));
@@ -300,7 +334,9 @@ void loop()
           //               + String(state.wheeld.speed[1]-state.wheel.speed[1]) + "," 
           //               + String(state.wheeld.speed[2]-state.wheel.speed[2]) + "," 
           //               + String(state.wheeld.speed[3]-state.wheel.speed[3]);
-          // Serial.println(typing);
+          String typing = String(state.pos_d.thz) + ","
+                        + String(state.pos_est.thz);
+          Serial.println(typing);
 
 
         }
