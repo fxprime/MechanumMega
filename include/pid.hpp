@@ -174,7 +174,7 @@ class HPID{
     currentTime = millis();
     deltaT=(currentTime-lastTime)/1000.0;
 
-    error=yawd-cur_yaw;
+    error= wrap_pi(yawd-cur_yaw);
     if( fabs(error) < 0.005) {
       currentError = 0;
       return 0;

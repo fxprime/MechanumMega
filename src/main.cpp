@@ -1,4 +1,4 @@
-// #define USE_PROTOCAL
+#define USE_PROTOCAL
 
 #include <Arduino.h>
 #include <avr/wdt.h>
@@ -50,6 +50,7 @@ void loop()
   uint32_t t_now = millis();
   uint64_t t_now_us = micros();
   static uint64_t last_t = 0;
+  static uint64_t last_tprotocal = 0;
   static double x = 0;
   static double y = 0;
 
@@ -61,7 +62,7 @@ void loop()
    * 
    * TODO Floating point the system variable but convert later to protocal related variables*/
 
-  if (t_now_us - last_t > 10000UL)
+  if (t_now_us - last_t > 1000UL)
   {
     double dt = (double)(t_now_us - last_t) / 1000000.0;
     last_t = t_now_us;
@@ -74,17 +75,12 @@ void loop()
     for (int i = 0; i < 4; i++)
     {
       double theata_percent = (double)(pos[i] - last_pos[i]) / (60*encoder_slot); // ratio of motor to wheel is 1:60
-      state.wheel.speed[i] = theata_percent*60.0/dt; // (theata_percent / time) = round per sec  --- > *60 = rpm
-      state.wheel.speed[i] = state.wheel.speed[i]*RPM_TO_RADPS; //rad/s
+      double rpm = theata_percent*60.0/dt; // (theata_percent / time) = round per sec  --- > *60 = rpm
+      state.wheel.speed[i] = state.wheel.speed[i]*0.85 + 0.15*rpm*RPM_TO_RADPS; //rad/s
       state.wheeldth.theata[i] = 2*M_PI*theata_percent;
     }
 
     memcpy(&last_pos[0], &pos[0], sizeof(long) * 4);
-
-
-
-    
-
 
     //Mecanum forward kinematic
     spos_s dpos_bf;
@@ -93,6 +89,15 @@ void loop()
     state.pos_est.x += (dpos_bf.x*cosf(state.pos_est.thz)-dpos_bf.y*sinf(state.pos_est.thz));
     state.pos_est.y += (dpos_bf.x*sinf(state.pos_est.thz)+dpos_bf.y*cosf(state.pos_est.thz));
     fwd_kinematic(state.wheel, state.vel_est);
+  }
+
+
+
+  if (t_now_us - last_tprotocal > 10000UL)
+  {
+    last_tprotocal = t_now_us;
+
+    
 
     {
       sensor_status_s sensorMsg;
@@ -141,18 +146,11 @@ void loop()
     
 
     
-
-
-    // String typing = String(state.wheel.speed[0]) + "\t"
-    //           + String(state.wheel.speed[1]) + "\t"
-    //           + String(state.wheel.speed[2]) + "\t"
-    //           + String(state.wheel.speed[3]);
-
-    // // String typing = String(vxfb) + "\t" + String(vyfb) + "\t" + String(w0fb);
-    // // String typing = String(AccX) + "\t" + String(AccY)+ "\t" + String(AccZ) + "\t" + String(GyroZ);
-    // String typing = String(state.vel_est.wz) + "\t" + String(GyroZ);
-    // // String typing = String(AccX) + "\t" + String(AccY);
-    // Serial.println(typing);
+    String typing = String(state.wheeld.speed[0]) + "," 
+                  + String(state.wheel.speed[0]);
+    // String typing = String(10*state.vel_est.vx) + "," 
+    //               + String(10*state.veld.vx);
+    Serial.println(typing);
   }
 
 
@@ -189,6 +187,9 @@ void loop()
 
     modeHandle();
     speedHandle();
+    float veldx = 0;
+    float veldy = 0;
+    float veldwz= 0;
 
     /**
      * Manual control 
@@ -197,75 +198,66 @@ void loop()
     {
       //Force manual when rc is engaged
       state.mode = mMANUAL;
-      int LY = state.rc.RY;
-      int LX = state.rc.LX;
-      int RX = state.rc.RX;
-      float forwardNormalized = (float)(-LY + 128) / 127.f;
 
-      forwardNormalized = constrain(forwardNormalized, -1.f, 1.f);
-      float multiplier = (state.rc.L1 && state.rc.R1) ? 255.f : 125.f;
-      int forward = (int)(pow(forwardNormalized, 2.0) * multiplier);
+      float cmd_scale = (state.rc.L1 && state.rc.R1) ? 0.6f : 0.3f;
+      float max_speed = cmd_scale * max_linear_spd;
+      float max_rotate = cmd_scale * max_turn_spd;
 
-      // Preserve the direction of movement.
-      if (forwardNormalized < 0)
-      {
-        forward = -forward;
+      float forward = (float)(-state.rc.RY + 128) / 127.f;
+      float right = -(state.rc.RX - 128)/127;
+      float ccwTurn = -(state.rc.LX - 128)/127 ;
+      applyDeadbandf(forward, 0.07);
+      applyDeadbandf(right, 0.07);
+      applyDeadbandf(ccwTurn, 0.07);
+      
+      
+      veldx = forward*max_speed;
+      veldy = -right*max_speed;
+      veldwz = ccwTurn*max_rotate;
+      float vel_norm = sqrtf( veldx*veldx + veldy*veldy );
+      if( vel_norm > max_speed ) {
+        veldx = max_speed*(veldx / vel_norm);
+        veldy = max_speed*(veldy / vel_norm);
       }
 
-      int right = -RX + 127;
-      int ccwTurn = (LX - 127) ;
-      
-
-      
-      const float cmd_scale = 0.3;
-      state.veld.vx = cmd_scale*forward*max_linear_spd/127.0;
-      state.veld.vy = -cmd_scale*right*max_linear_spd/127.0;
-      if( abs(ccwTurn) < 10 ) {
-        state.heading_lock = true;
-      }else{
-        state.heading_lock = false;
-        state.veld.wz = -cmd_scale*ccwTurn*max_angular_spd/127.0;
-      }
-      state.veld.last_update = t_now;
-
-
-      // float test_force = (float)state.veld.vx*255.0/10.0;
-      // Serial.println(test_force);
-      // motorLF->speed(test_force);
-      // motorRF->speed(test_force);
-      // motorLR->speed(test_force);
-      // motorRR->speed(test_force);
-      // String typing = String(state.wheeld.speed[0]) + "\t"
-      //   + String(state.wheeld.speed[1]) + "\t"
-      //   + String(state.wheeld.speed[2]) + "\t"
-      //   + String(state.wheeld.speed[3]); 
-      // String typing = String(state.veld.vx) + "\t"
-      //   + String(state.veld.vy) + "\t"
-      //   + String(state.veld.wz);
-      // String typing = String(wspd_to_pwm(state.wheeld.speed[0])) + "\t"
-      //               + String(state.wheeld.speed[0]) + "\t"
-      //               + String(state.wheel.speed[0]);
-      // String typing = String(state.wheeld.speed[0]) + "\t"
-      //               + String(state.wheel.speed[0]);
-      // String typing = String(mpid_LF.getPIDOUT()) + "\t"
-      //               + String(mpid_LF.getPWMOUT());
-      // Serial.println(typing);
     }
     else if(state.mode == mAUTO){
-      state.veld.vx =0;
-      state.veld.vy =0;
-      state.veld.wz =0;
-      state.veld.last_update = t_now;
+      veldx =0;
+      veldy =0;
+      veldwz =0;
       state.heading_lock = true;
       
     }
     else {
-      state.veld.vx =0;
-      state.veld.vy =0;
-      state.veld.wz =0;
-      state.veld.last_update = t_now;
+      veldx =0;
+      veldy =0;
+      veldwz =0;
       state.heading_lock = true;
     }
+
+
+
+    /* -------------------------------------------------------------------------- */
+    /*              Gradually velocity to match with velocity desired             */
+    /* -------------------------------------------------------------------------- */
+
+    static uint32_t last_accel_t = t_now;
+    const float dt = (t_now - last_accel_t)/1000.0;
+    last_accel_t = t_now;
+    if( veldx==0 && fabs(state.veld.vx - veldx) < max_rc_accel*dt  ) state.veld.vx = 0;
+    if( veldy==0 && fabs(state.veld.vy - veldy) < max_rc_accel*dt  ) state.veld.vy = 0;
+    state.veld.vx += ( state.veld.vx > veldx ? -max_rc_accel*dt : max_rc_accel*dt );
+    state.veld.vy += ( state.veld.vy > veldy ? -max_rc_accel*dt : max_rc_accel*dt );
+    if( veldwz==0 && fabs(state.veld.wz - veldwz) < max_rc_waccel*dt  ) {
+      state.heading_lock = true;
+      state.veld.wz = 0;
+    }else{
+      state.heading_lock = false;
+      state.veld.wz += ( state.veld.wz > veldwz ? -max_rc_waccel*dt : max_rc_waccel*dt );
+    }
+    state.veld.last_update = t_now;
+
+
 
 
     /* -------------------------------------------------------------------------- */
@@ -283,9 +275,6 @@ void loop()
   }
 
 
-  /* -------------------------------------------------------------------------- */
-  /*                                  Motor Out                                 */
-  /* -------------------------------------------------------------------------- */
 
   {
 
@@ -316,6 +305,9 @@ void loop()
           
           inv_kinematic(state.veld, state.wheeld);
 
+          /* -------------------------------------------------------------------------- */
+          /*                                  Motor Out                                 */
+          /* -------------------------------------------------------------------------- */
           motorLF->speed(mpid_LF.getPWM(state.wheeld.speed[0], state.wheel.speed[0]));
           motorRF->speed(mpid_RF.getPWM(state.wheeld.speed[1], state.wheel.speed[1]));
           motorLR->speed(mpid_LR.getPWM(state.wheeld.speed[2], state.wheel.speed[2]));
@@ -334,9 +326,13 @@ void loop()
           //               + String(state.wheeld.speed[1]-state.wheel.speed[1]) + "," 
           //               + String(state.wheeld.speed[2]-state.wheel.speed[2]) + "," 
           //               + String(state.wheeld.speed[3]-state.wheel.speed[3]);
-          String typing = String(state.pos_d.thz) + ","
-                        + String(state.pos_est.thz);
-          Serial.println(typing);
+          // String typing = String(10*state.veld.wz) + ","
+          //               + String(10*state.vel_est.wz);
+          // String typing = String(state.wheeld.speed[0]) + "," 
+          //               + String(state.wheel.speed[0]);
+          // String typing = String(state.vel_est.vx) + "," 
+          //               + String(state.veld.vx);
+          // Serial.println(typing);
 
 
         }

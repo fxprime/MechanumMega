@@ -10,12 +10,16 @@ const double RPM_TO_RADPS = 2.0*M_PI/60.0;
 
 const float max_wspd = 20.0; //rad/s
 const float max_linear_spd = 0.4; //m/s
-const float max_angular_spd = 2.5; //rad/s
+const float max_turn_spd = 2.5; //rad/s
 
 
-const float _Mkp = 0.2;
-const float _Mki = 0.01;
-const float _Mkd = 0.05;
+const float max_rc_accel = 0.5; //m/s^2
+const float max_rc_waccel = 5; //rad/s^2
+
+
+const float _Mkp = 0.4;
+const float _Mki = 0.02;
+const float _Mkd = 0.4;
 
 const float _Hkp = 0.2;
 const float _Hki = 0.01;
