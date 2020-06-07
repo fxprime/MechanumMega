@@ -1,4 +1,4 @@
-// #define USE_PROTOCAL
+#define USE_PROTOCAL
 // #define TUNING_PID
 #include <Arduino.h>
 #include <avr/wdt.h>
@@ -374,12 +374,12 @@ void loop()
 
                 // String typing = String(state.wheeld.speed[0]) + "," 
                 //   + String(state.wheel.speed[0]);
-                String typing = String(mpid_LF.getPWMOUT()) 
-                        + "," + String(10*state.wheel.speed[0])
-                        + "," + String(10*state.wheeld.speed[0]);
+                // String typing = String(mpid_LF.getPWMOUT()) 
+                //         + "," + String(10*state.wheel.speed[0])
+                //         + "," + String(10*state.wheeld.speed[0]);
                 // String typing = String(10*state.vel_est.vx) + "," 
                 //               + String(10*state.veld.vx);
-                Serial.println(typing);
+                // Serial.println(typing);
     
           // }
 
