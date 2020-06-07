@@ -1,10 +1,11 @@
-#define USE_PROTOCAL
-
+// #define USE_PROTOCAL
+// #define TUNING_PID
 #include <Arduino.h>
 #include <avr/wdt.h>
 
-#include "protocal.h"
+#include "msg.h"
 #include "config.h"
+#include "protocal.h"
 #include "kinematic.h"
 #include "accel_gyro.h"
 #include "ps2.h"
@@ -13,10 +14,14 @@
 static inline void modeHandle();
 static inline void speedHandle();
 
-MPID mpid_LF(_Mkp, _Mki, _Mkd, false);
-MPID mpid_RF(_Mkp, _Mki, _Mkd, false);
-MPID mpid_LR(_Mkp, _Mki, _Mkd, false);
-MPID mpid_RR(_Mkp, _Mki, _Mkd, false);
+// MPID mpid_LF(_Mkp, _Mki, _Mkd, false);
+// MPID mpid_RF(_Mkp, _Mki, _Mkd, false);
+// MPID mpid_LR(_Mkp, _Mki, _Mkd, false);
+// MPID mpid_RR(_Mkp, _Mki, _Mkd, false);
+MPID2 mpid_LF(_Mkp2, _Mki2);
+MPID2 mpid_RF(_Mkp2, _Mki2);
+MPID2 mpid_LR(_Mkp2, _Mki2);
+MPID2 mpid_RR(_Mkp2, _Mki2);
 HPID headingPID(_Hkp, _Hki, _Hkd);
 
 void setup()
@@ -36,15 +41,25 @@ void setup()
 
 void loop()
 {
-
+  wdt_disable();
+  wdt_enable(WDTO_250MS);
   accel_gyro_update();
 
   {
-    uint8_t buf[1];
-    memset(&buf[0], 0, sizeof(buf));
-
-    buf[0] = Serial.read();
-    serial_handle(&buf[0], 1);
+    if(Serial.available()) {
+      uint16_t len = Serial.available();
+      uint8_t buf[64];
+      len = (len > 64 ? 64:len);
+      memset(&buf[0], 0, sizeof(buf));
+      for (size_t i = 0; i < len; i++)
+      {
+        buf[i] = Serial.read();
+      }
+      serial_handle(&buf[0], len);
+      
+      
+    }
+    
   }
 
   uint32_t t_now = millis();
@@ -146,11 +161,7 @@ void loop()
     
 
     
-    String typing = String(state.wheeld.speed[0]) + "," 
-                  + String(state.wheel.speed[0]);
-    // String typing = String(10*state.vel_est.vx) + "," 
-    //               + String(10*state.veld.vx);
-    Serial.println(typing);
+
   }
 
 
@@ -179,17 +190,23 @@ void loop()
 
 
 
-  /**
-   * Allow control motor while joy is ok (for now) 
-   */
-  if (is_ps2_ok())
+  /* -------------------------------------------------------------------------- */
+  /*                               Control handle                               */
+  /* -------------------------------------------------------------------------- */
+
+  t_now = millis();
+  static uint32_t last_state = t_now;
+  if (is_ps2_ok() && t_now - last_state > 10 )
   {
+    last_state = t_now;
 
     modeHandle();
     speedHandle();
     float veldx = 0;
     float veldy = 0;
     float veldwz= 0;
+    float max_speed  = 0;
+    float max_rotate = 0;
 
     /**
      * Manual control 
@@ -200,39 +217,62 @@ void loop()
       state.mode = mMANUAL;
 
       float cmd_scale = (state.rc.L1 && state.rc.R1) ? 0.6f : 0.3f;
-      float max_speed = cmd_scale * max_linear_spd;
-      float max_rotate = cmd_scale * max_turn_spd;
-
-      float forward = (float)(-state.rc.RY + 128) / 127.f;
-      float right = -(state.rc.RX - 128)/127;
-      float ccwTurn = -(state.rc.LX - 128)/127 ;
+      float forward   = (float)(-state.rc.RY + 128) / 127.f;
+      float right     = -(state.rc.RX - 128)/127;
+      float ccwTurn   = -(state.rc.LX - 128)/127 ;
       applyDeadbandf(forward, 0.07);
-      applyDeadbandf(right, 0.07);
+      applyDeadbandf(right,   0.07);
       applyDeadbandf(ccwTurn, 0.07);
       
       
-      veldx = forward*max_speed;
-      veldy = -right*max_speed;
-      veldwz = ccwTurn*max_rotate;
-      float vel_norm = sqrtf( veldx*veldx + veldy*veldy );
-      if( vel_norm > max_speed ) {
-        veldx = max_speed*(veldx / vel_norm);
-        veldy = max_speed*(veldy / vel_norm);
-      }
+      max_speed   = cmd_scale * max_linear_spd;
+      max_rotate  = cmd_scale * max_turn_spd;
+      veldx       = forward*max_speed;
+      veldy       = -right*max_speed;
+      veldwz      = ccwTurn*max_rotate;
+
+      // Serial.println(String(veldx,2) + ", " + String(veldy,2) + ", " + String(veldwz,2));   
+      // send_text_out(3, "Manual veld " + String(veldx,2) + ", " + String(veldy,2) + ", " + String(veldwz,2));
 
     }
     else if(state.mode == mAUTO){
-      veldx =0;
-      veldy =0;
-      veldwz =0;
-      state.heading_lock = true;
+      if( t_now - state.veld_navi.last_update > 500 ) {
+        state.mode = mMANUAL;
+        veldx   = 0;
+        veldy   = 0;
+        veldwz  = 0;
+      }else{
+        max_speed   = max_linear_spd;
+        max_rotate  = max_turn_spd;
+        veldx       = state.veld_navi.vx;
+        veldy       = state.veld_navi.vy;
+        veldwz      = state.veld_navi.wz; 
+      }
+      
+      // send_text_out("Auto veld " + String(veldx,2) + ", " + String(veldy,2) + ", " + String(veldwz,2));
+      // Serial.println(String(veldx,2) + ", " + String(veldy,2) + ", " + String(veldwz,2));      
       
     }
     else {
-      veldx =0;
-      veldy =0;
-      veldwz =0;
-      state.heading_lock = true;
+      max_speed           = max_linear_spd;
+      max_rotate          = max_turn_spd;
+      veldx               = 0;
+      veldy               = 0;
+      veldwz              = 0;
+      state.heading_lock  = true;
+    }
+
+    /* -------------------------------------------------------------------------- */
+    /*                       Limit speed and rotation speed                       */
+    /* -------------------------------------------------------------------------- */
+
+    float vel_norm = sqrtf( veldx*veldx + veldy*veldy );
+    if( vel_norm > max_speed ) {
+      veldx               = max_speed*(veldx / vel_norm);
+      veldy               = max_speed*(veldy / vel_norm);
+    }
+    if( fabs(veldwz) > max_rotate) {
+      veldwz              = max_rotate;
     }
 
 
@@ -240,15 +280,19 @@ void loop()
     /* -------------------------------------------------------------------------- */
     /*              Gradually velocity to match with velocity desired             */
     /* -------------------------------------------------------------------------- */
-
-    static uint32_t last_accel_t = t_now;
-    const float dt = (t_now - last_accel_t)/1000.0;
-    last_accel_t = t_now;
-    if( veldx==0 && fabs(state.veld.vx - veldx) < max_rc_accel*dt  ) state.veld.vx = 0;
-    if( veldy==0 && fabs(state.veld.vy - veldy) < max_rc_accel*dt  ) state.veld.vy = 0;
-    state.veld.vx += ( state.veld.vx > veldx ? -max_rc_accel*dt : max_rc_accel*dt );
-    state.veld.vy += ( state.veld.vy > veldy ? -max_rc_accel*dt : max_rc_accel*dt );
-    if( veldwz==0 && fabs(state.veld.wz - veldwz) < max_rc_waccel*dt  ) {
+    t_now_us = micros();
+    static uint64_t last_accel_t = t_now_us;
+    const float dt = (t_now_us - last_accel_t)/1000000.0;
+    last_accel_t = t_now_us;
+    if( fabs(veldx) < 0.05 && fabs(state.veld.vx - veldx) < max_rc_accel*dt  ) 
+      state.veld.vx = 0;
+    else
+      state.veld.vx += ( state.veld.vx > veldx ? -max_rc_accel*dt : max_rc_accel*dt );
+    if( fabs(veldy) < 0.05 && fabs(state.veld.vy - veldy) < max_rc_accel*dt  ) 
+      state.veld.vy = 0;
+    else
+      state.veld.vy += ( state.veld.vy > veldy ? -max_rc_accel*dt : max_rc_accel*dt );
+    if( fabs(veldwz) < 0.01 && fabs(state.veld.wz - veldwz) < max_rc_waccel*dt  ) {
       state.heading_lock = true;
       state.veld.wz = 0;
     }else{
@@ -256,7 +300,6 @@ void loop()
       state.veld.wz += ( state.veld.wz > veldwz ? -max_rc_waccel*dt : max_rc_waccel*dt );
     }
     state.veld.last_update = t_now;
-
 
 
 
@@ -282,7 +325,7 @@ void loop()
      * TODO
      * Convert between veld and pwm (Using pid?)
      */ 
-
+    t_now_us = micros();
     if( t_now - state.veld.last_update < 1000 ) {
 
 
@@ -290,15 +333,15 @@ void loop()
       /*                              Motor control pid                             */
       /* -------------------------------------------------------------------------- */
       {
-        static uint32_t last_cnt = millis();
-        if( t_now - last_cnt > 10) {
-          last_cnt = t_now;
+        static uint64_t last_cnt = micros();
+        if( t_now_us - last_cnt > 10000) {
+          last_cnt = t_now_us;
           
 
           /* -------------------------------------------------------------------------- */
           /*                    keep control yaw when in heading lock                   */
           /* -------------------------------------------------------------------------- */
-          if(state.heading_lock)
+          if(state.heading_lock && !tuning_pid)
             state.veld.wz = headingPID.getYawrateD(state.pos_d.thz, state.pos_est.thz);
           else
             headingPID.init();
@@ -308,6 +351,41 @@ void loop()
           /* -------------------------------------------------------------------------- */
           /*                                  Motor Out                                 */
           /* -------------------------------------------------------------------------- */
+          
+          // {
+          //   float Output = 0;
+          //   static double Kp = 80, Ki = 5;
+          //   static float error_0 = 0;
+          //   static float Ui, U0 = 0;
+          //   float error_i = state.wheeld.speed[0] - state.wheel.speed[0];
+          //   if ( fabs(error_i) < 0.05 ) {
+          //     error_i = 0;
+          //   }
+          //   else {
+          //     error_i = error_i;
+          //   }
+          //   float d_error = error_i - error_0;
+          //   error_0 = error_i;
+          //   Ui = U0 + (Kp * d_error) + (Ki * error_i);
+          //   U0 = Ui;
+          //   Output = Ui;
+          //   Output = constrain(Output, -255, 255);
+          //   motorLF->speed(Output);
+
+                // String typing = String(state.wheeld.speed[0]) + "," 
+                //   + String(state.wheel.speed[0]);
+                String typing = String(mpid_LF.getPWMOUT()) 
+                        + "," + String(10*state.wheel.speed[0])
+                        + "," + String(10*state.wheeld.speed[0]);
+                // String typing = String(10*state.vel_est.vx) + "," 
+                //               + String(10*state.veld.vx);
+                Serial.println(typing);
+    
+          // }
+
+          
+
+
           motorLF->speed(mpid_LF.getPWM(state.wheeld.speed[0], state.wheel.speed[0]));
           motorRF->speed(mpid_RF.getPWM(state.wheeld.speed[1], state.wheel.speed[1]));
           motorLR->speed(mpid_LR.getPWM(state.wheeld.speed[2], state.wheel.speed[2]));
@@ -330,23 +408,13 @@ void loop()
           //               + String(10*state.vel_est.wz);
           // String typing = String(state.wheeld.speed[0]) + "," 
           //               + String(state.wheel.speed[0]);
-          // String typing = String(state.vel_est.vx) + "," 
-          //               + String(state.veld.vx);
+          // String typing = String(state.vel_est.vx*10) + "," 
+          //               + String(state.veld.vx*10);
           // Serial.println(typing);
 
 
         }
-      }
-      // motorLF->speed(pwm_rc);
-      // motorRF->speed(pwm_rc);
-      // motorLR->speed(pwm_rc);
-      // motorRR->speed(pwm_rc);
-
-
-      // motorLF->speed(wspd_to_pwm(state.wheeld.speed[0]));
-      // motorRF->speed(wspd_to_pwm(state.wheeld.speed[1]));
-      // motorLR->speed(wspd_to_pwm(state.wheeld.speed[2]));
-      // motorRR->speed(wspd_to_pwm(state.wheeld.speed[3]));
+      } 
 
 
       // Hard stop if power less than thresold to drain all current back to source faster.
@@ -370,7 +438,6 @@ void loop()
       }
     }
   }
-  
       
 }
 
@@ -401,7 +468,9 @@ static inline void modeHandle() {
   static bool last_but = false;
   if ( !last_but && state.rc.but_X ) {
     state.mode = (mode_enum)((state.mode+1)%mNum);
-    Serial.println("Mode chaged! to " + String(mode_interpret(state.mode)));
+    // Serial.println("Mode chaged! to " + String(mode_interpret(state.mode)));
+
+      send_text_out("Mode chaged! to " + String(mode_interpret(state.mode)));
   }
   last_but = state.rc.but_X;
 }

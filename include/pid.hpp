@@ -6,7 +6,7 @@
 /* -------------------------------------------------------------------------- */
 /*                          ฟังก์ชัน map ค่าแบบทศนิยม                             */
 /* -------------------------------------------------------------------------- */
-double mapf(double val, double in_min, double in_max, double out_min, double out_max) {
+static inline double mapf(double val, double in_min, double in_max, double out_min, double out_max) {
     return (val - in_min) * (out_max - out_min) / (in_max - in_min) + out_min;
 }
 
@@ -15,7 +15,7 @@ double mapf(double val, double in_min, double in_max, double out_min, double out
 /* -------------------------------------------------------------------------- */
 /*    ฟังก์ชันทำ deadband สำหรับตัดค่าที่ต่ำกว่า deadband ให้กลายเป็น 0 สำหรับช่วง [-1,1]  */
 /* -------------------------------------------------------------------------- */
-float applyDeadbandf(const float& value, const float& d) {
+static inline float applyDeadbandf(const float& value, const float& d) {
   float out=0;
   if (value>d) 
     out = (value-d)/(1-d);
@@ -89,17 +89,17 @@ class MPID{
     currentTime = millis();
     deltaT=(currentTime-lastTime)/1000.0;
 
-    error=wheeld-cur_wheeld;
+    error = wheeld-cur_wheeld;
     
-    currentError+=kI*error;
+    currentError += kI*error;
     if( fabs(wheeld) < 0.5 && fabs(error) < 0.1){
       currentError = 0;
     }
     throttle = predictPWM(wheeld) / 255.0;
 
-    p_out = kP*error;
-    i_out = constrain(currentError, -0.8, 0.8);
-    d_out = constrain(kD*(error-lastError), -0.8,0.8);
+    p_out   = kP*error;
+    i_out   = constrain(currentError, -0.8, 0.8);
+    d_out   = constrain(kD*(error-lastError), -0.8,0.8);
     pid_out = constrain(throttle + p_out + i_out + d_out,-1.0,1.0);
     pwm_out = pid_out*255.0;
     if( fabs(sign(wheeld) - sign(pwm_out)) > 1 ) pwm_out = 0;
@@ -124,6 +124,89 @@ class MPID{
     return pwm_out;
   }
 };
+
+
+
+class MPID2{
+  public:
+
+    float kP,kI;
+    float error;
+    float currentError;
+    float lastError;
+    float p_out;
+    float i_out;
+    float Ui;
+    float U0;
+    float pwm_out;
+    unsigned long lastTime;
+    unsigned long currentTime;
+    
+    float deltaT;
+
+
+  MPID2(float kp,float ki){
+
+    kP=kp;
+    kI=ki;
+
+      
+    Ui=0;
+    U0=0;
+
+    error=0;
+    currentError=0;
+    lastError=0;
+    deltaT=0.1;//TODO
+    
+  }
+
+  inline void init() {
+    lastTime=millis();
+  }
+
+  inline float getPWM(const float& wheeld, const float& cur_wheeld){
+    currentTime = millis();
+    deltaT=(currentTime-lastTime)/1000.0;
+
+    error=wheeld-cur_wheeld;
+    
+
+
+    if ( fabs(error) < 0.05 ) {
+      error = 0;
+    }
+    else {
+      error = error;
+    }
+    float d_error = error - lastError;
+    lastError = error;
+    Ui = U0 + (kP * d_error) + (kI * error);
+    U0 = Ui;
+    pwm_out = Ui;
+    pwm_out = constrain(pwm_out, -255, 255);
+
+    
+
+
+
+    return pwm_out;
+  }
+
+  inline float getPIDOUT() {
+    return U0;
+  }
+  inline float getPOUT() {
+    return p_out;
+  }
+  inline float getIOUT() {
+    return i_out;
+  }
+  inline float getPWMOUT() {
+    return pwm_out;
+  }
+};
+
 
 
 

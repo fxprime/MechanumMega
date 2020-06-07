@@ -16,16 +16,16 @@ class SPDMotor {
     /// pwm = 0, stop (no active control)
     /// pwm = 1 to 255, proportion of CCW rotation
     /// pwm = -1 to -255, proportion of CW rotation
-    void speed( int pwm );
+    inline void speed( const int& pwm );
 
     /// Activate a SHORT BRAKE mode, which shorts the motor drive EM, clamping motion.
-    void hardStop();
+    inline void hardStop();
 
     /// Get the current speed.
-    int getSpeed();
+    inline int getSpeed();
 
     /// Get the current rotation position from the encoder.
-    long getEncoderPosition();
+    inline long getEncoderPosition();
 
   private:
     Encoder *_encoder;
@@ -52,7 +52,7 @@ SPDMotor::SPDMotor( int encoderA, int encoderB, bool encoderReversed, int motorP
 /// pwm = 0, stop (no active control)
 /// pwm = 1 to 255, proportion of CCW rotation
 /// pwm = -1 to -255, proportion of CW rotation
-void SPDMotor::speed( int speedPWM ) {
+inline void SPDMotor::speed( const int& speedPWM ) {
   _speed = speedPWM;
   if ( speedPWM == 0 ) {
     digitalWrite(_motorDir1, LOW);
@@ -70,7 +70,7 @@ void SPDMotor::speed( int speedPWM ) {
 }
 
 /// Activate a SHORT BRAKE mode, which shorts the motor drive EM, clamping motion.
-void SPDMotor::hardStop() {
+inline void SPDMotor::hardStop() {
   _speed = 0;
   digitalWrite(_motorDir1, HIGH);
   digitalWrite(_motorDir2, HIGH);
@@ -78,12 +78,12 @@ void SPDMotor::hardStop() {
 }
 
 /// Get the current speed.
-int SPDMotor::getSpeed() {
+inline int SPDMotor::getSpeed() {
   return _speed;
 }
 
 /// Get the current rotation position from the encoder.
-long SPDMotor::getEncoderPosition() {
+inline long SPDMotor::getEncoderPosition() {
   long position = _encoder->read();
   return _encoderReversed ? -position : position;
 }

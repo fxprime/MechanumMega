@@ -1,11 +1,13 @@
 #define HEADER 0xf5
 
+#define TEXT_OUT            5
 #define ACK                 10
 #define SENSOR_STATUS       50
 #define SYSTEM_STATUS       51
 #define RC_STATUS           52
 #define VEL_CNT             53
-#define CMD_DO_2            101
+
+#define CMD_NAV_VEL        101
 
 
 #pragma pack(push, 1)
@@ -60,6 +62,12 @@ struct pos_s {
     int16_t   thz;          // crad/s
 };
 
+
+
+/* TEXT_OUT */
+struct text_out_s {
+    char text[58];
+};
 
 /* SENSOR_STATUS */
 struct sensor_status_s {
