@@ -236,8 +236,7 @@ void loop()
 
     }
     else if(state.mode == mAUTO){
-      if( t_now - state.veld_navi.last_update > 500 ) {
-        state.mode = mMANUAL;
+      if( t_now - state.veld_navi.last_update > 1000 ) {
         veldx   = 0;
         veldy   = 0;
         veldwz  = 0;
