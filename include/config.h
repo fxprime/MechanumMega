@@ -25,9 +25,9 @@ const float _Mkd = 0.4;
 const float _Mkp2 = 40;
 const float _Mki2 = 5;
 
-const float _Hkp = 0.2;
+const float _Hkp = 0.15;
 const float _Hki = 0.01;
-const float _Hkd = 0.0;
+const float _Hkd = 0.01;
 
 /**
  * Use absolute timestamp for last_update variable here

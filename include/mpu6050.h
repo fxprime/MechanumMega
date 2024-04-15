@@ -291,26 +291,26 @@ void sensor_Calibrate()
 {
 
     //-0.467153,-0.109622,-9.794103,-0.045163,0.025449,0.026873
-    acc_offsetX = -0.467153;
-    acc_offsetY = -0.109622;
-    acc_offsetZ = 9.80665-9.794103;
-    gyro_offsetX = -0.045163;
-    gyro_offsetY = 0.025449;
-    gyro_offsetZ = 0.026873;
+    // acc_offsetX = -0.467153;
+    // acc_offsetY = -0.109622;
+    // acc_offsetZ = 9.80665-9.794103;
+    // gyro_offsetX = -0.045163;
+    // gyro_offsetY = 0.025449;
+    // gyro_offsetZ = 0.026873;
     
 
-    // for (uint8_t i=0; i<60; i++) //Collect 60 samples
-    // {
-    //     mpu6050_readGyroSum();
-    //     mpu6050_readAccelSum();
-    //     delay(30);
-    // }
-    // gyro_offsetX = (gyroSum[XAXIS]/gyroSamples)*gyroScaleFactor;
-    // gyro_offsetY = (gyroSum[YAXIS]/gyroSamples)*gyroScaleFactor;
-    // gyro_offsetZ = (gyroSum[ZAXIS]/gyroSamples)*gyroScaleFactor;
-    // acc_offsetX = (accelSum[XAXIS]/gyroSamples)*accelScaleFactor;
-    // acc_offsetY = (accelSum[YAXIS]/gyroSamples)*accelScaleFactor;
-    // acc_offsetZ = (accelSum[ZAXIS]/gyroSamples)*accelScaleFactor;
+    for (uint8_t i=0; i<150; i++) //Collect 60 samples
+    {
+        mpu6050_readGyroSum();
+        mpu6050_readAccelSum();
+        delay(30);
+    }
+    gyro_offsetX = (gyroSum[XAXIS]/gyroSamples)*gyroScaleFactor;
+    gyro_offsetY = (gyroSum[YAXIS]/gyroSamples)*gyroScaleFactor;
+    gyro_offsetZ = (gyroSum[ZAXIS]/gyroSamples)*gyroScaleFactor;
+    acc_offsetX = (accelSum[XAXIS]/gyroSamples)*accelScaleFactor;
+    acc_offsetY = (accelSum[YAXIS]/gyroSamples)*accelScaleFactor;
+    acc_offsetZ = (accelSum[ZAXIS]/gyroSamples)*accelScaleFactor;
     gyroSamples = 0.0;
 
     Serial.println(String(acc_offsetX,6) + "," + String(acc_offsetY,6) + "," + String(acc_offsetZ,6)+ "," + String(gyro_offsetX,6)+ "," + String(gyro_offsetY,6)+ "," + String(gyro_offsetZ,6));

@@ -268,6 +268,14 @@ class HPID{
     p_out = kP*error;
     i_out = constrain(currentError, -0.8, 0.8);
     d_out = constrain(kD*(error-lastError), -0.8,0.8);
+
+
+    // Serial.print(">p:");Serial.println(p_out,4);
+    // Serial.print(">i:");Serial.println(i_out,4);
+    // Serial.print(">d:");Serial.println(d_out,4);
+
+
+
     pid_out = constrain(p_out + i_out + d_out,-1.0,1.0);
     yawrate_out = pid_out*max_wspd;
 

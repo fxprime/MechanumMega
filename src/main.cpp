@@ -44,31 +44,31 @@ void loop()
   wdt_disable();
   wdt_enable(WDTO_250MS);
   accel_gyro_update();
-
-  {
-    if(Serial.available()) {
-      uint16_t len = Serial.available();
-      uint8_t buf[64];
-      len = (len > 64 ? 64:len);
-      memset(&buf[0], 0, sizeof(buf));
-      for (size_t i = 0; i < len; i++)
-      {
-        buf[i] = Serial.read();
-      }
-      serial_handle(&buf[0], len);
-      
-      
+ 
+  if(Serial.available()) {
+    uint16_t len = Serial.available();
+    uint8_t buf[64];
+    len = (len > 64 ? 64:len);
+    memset(&buf[0], 0, sizeof(buf));
+    for (size_t i = 0; i < len; i++)
+    {
+      buf[i] = Serial.read();
     }
+    serial_handle(&buf[0], len);
     
-  }
+    
+  } 
 
   uint32_t t_now = millis();
   uint64_t t_now_us = micros();
   static uint64_t last_t = 0;
   static uint64_t last_tprotocal = 0;
   static double x = 0;
-  static double y = 0;
-
+  static double y = 0; 
+  static double thz = 0;
+  static double correction =0;
+  static double dthz_sensor = 0;
+  static double dthz_cal = 0;
 
   /**
    * 
@@ -100,7 +100,32 @@ void loop()
     //Mecanum forward kinematic
     spos_s dpos_bf;
     fwd_kinematic(state.wheeldth, dpos_bf);
-    state.pos_est.thz = wrap_pi(state.pos_est.thz + dpos_bf.thz);
+
+
+    // state.pos_est.thz = wrap_pi(state.pos_est.thz + dpos_bf.thz);
+
+    // DO complementary filter between thz from different in pos_bf.thz
+    double gyroZDB = (fabs(GyroZ)<0.0005? 0:GyroZ);
+    dthz_sensor = gyroZDB*dt; 
+    if( fabs(dthz_sensor) < 0.00001) 
+      dthz_sensor =0;
+
+
+    if(fabs(dpos_bf.thz)<0.0001)
+      correction += 0.00025*( dpos_bf.thz - dthz_sensor); 
+  
+    double dthz_corrected = dthz_sensor + correction;
+    dthz_corrected = (fabs(dthz_corrected) < 0.001 ? 0:dthz_corrected);
+
+    thz = thz + dthz_corrected;
+    state.pos_est.thz = thz;
+    dthz_cal = dpos_bf.thz;
+
+
+
+
+
+
     state.pos_est.x += (dpos_bf.x*cosf(state.pos_est.thz)-dpos_bf.y*sinf(state.pos_est.thz));
     state.pos_est.y += (dpos_bf.x*sinf(state.pos_est.thz)+dpos_bf.y*cosf(state.pos_est.thz));
     fwd_kinematic(state.wheel, state.vel_est);
@@ -134,6 +159,16 @@ void loop()
       sensorMsg.est_pos.x = state.pos_est.x*1000;
       sensorMsg.est_pos.y = state.pos_est.y*1000;
       sensorMsg.est_pos.thz = state.pos_est.thz*100;
+
+      // Serial.print(">gz:");Serial.println(dthz_sensor,5);
+      // Serial.print(">dpos:");Serial.println(dthz_cal,5);
+      // Serial.print(">corr:");Serial.println(correction,6);
+      // Serial.print(">thz:");Serial.println(state.pos_est.thz);
+      // Serial.print(">thzd:");Serial.println(state.pos_d.thz);
+      // Serial.print(">w:");Serial.println(state.vel_est.wz);
+      // Serial.print(">wd:");Serial.println(state.veld.wz);
+
+
       send_sensor_status(this_quid, sensorMsg);
     }
 
@@ -218,8 +253,8 @@ void loop()
 
       float cmd_scale = (state.rc.L1 && state.rc.R1) ? 0.6f : 0.3f;
       float forward   = (float)(-state.rc.RY + 128) / 127.f;
-      float right     = -(state.rc.RX - 128)/127;
-      float ccwTurn   = -(state.rc.LX - 128)/127 ;
+      float right     = -(state.rc.RX - 128)/127.f;
+      float ccwTurn   = -(state.rc.LX - 128)/127.f ;
       applyDeadbandf(forward, 0.07);
       applyDeadbandf(right,   0.07);
       applyDeadbandf(ccwTurn, 0.07);
@@ -231,7 +266,7 @@ void loop()
       veldy       = -right*max_speed;
       veldwz      = ccwTurn*max_rotate;
 
-      // Serial.println(String(veldx,2) + ", " + String(veldy,2) + ", " + String(veldwz,2));   
+      // Serial.println(String(veldx,2) + ", " + String(veldy,2) + ", " + String(veldwz,4));   
       // send_text_out(3, "Manual veld " + String(veldx,2) + ", " + String(veldy,2) + ", " + String(veldwz,2));
 
     }
@@ -274,6 +309,10 @@ void loop()
       veldwz              = max_rotate;
     }
 
+    state.veld.wz = veldwz;
+    if(fabs(veldwz)> 0.001) 
+      state.heading_lock = false; 
+
 
 
     /* -------------------------------------------------------------------------- */
@@ -291,13 +330,14 @@ void loop()
       state.veld.vy = 0;
     else
       state.veld.vy += ( state.veld.vy > veldy ? -max_rc_accel*dt : max_rc_accel*dt );
-    if( fabs(veldwz) < 0.01 && fabs(state.veld.wz - veldwz) < max_rc_waccel*dt  ) {
-      state.heading_lock = true;
-      state.veld.wz = 0;
-    }else{
-      state.heading_lock = false;
-      state.veld.wz += ( state.veld.wz > veldwz ? -max_rc_waccel*dt : max_rc_waccel*dt );
-    }
+    // if( fabs(veldwz) < 0.01 && fabs(state.veld.wz - veldwz) < max_rc_waccel*dt  ) {
+    //   state.heading_lock = true;
+    //   state.veld.wz = 0;
+    // }else{
+    //   Serial.print("unlock ");Serial.print(veldwz,5);Serial.print(",");Serial.println(state.veld.wz,5);
+    //   state.heading_lock = false;
+    //   state.veld.wz += ( state.veld.wz > veldwz ? -max_rc_waccel*dt : max_rc_waccel*dt );
+    // }
     state.veld.last_update = t_now;
 
 
@@ -467,7 +507,7 @@ static inline void modeHandle() {
   static bool last_but = false;
   if ( !last_but && state.rc.but_X ) {
     state.mode = (mode_enum)((state.mode+1)%mNum);
-    // Serial.println("Mode chaged! to " + String(mode_interpret(state.mode)));
+    Serial.println("Mode chaged! to " + String(mode_interpret(state.mode)));
 
       send_text_out("Mode chaged! to " + String(mode_interpret(state.mode)));
   }
